@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>وكيل — Wakil AI Agent</title>
+  <link rel="stylesheet" href="{{ url_for('static',filename='css/style.css') }}"/>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='28'>🤖</text></svg>"/>
+</head>
+<body>
+
+<!-- ═══ SIDEBAR ════════════════════════════════════════════ -->
+<aside class="sidebar" id="sidebar">
+  <div class="sidebar-brand">
+    <span class="brand-icon">🤖</span>
+    <div>
+      <div class="brand-ar">وكيل</div>
+      <div class="brand-en">Wakil Agent v2</div>
+    </div>
+  </div>
+
+  <!-- Mode tabs -->
+  <div class="mode-tabs">
+    <button class="mode-tab active" data-mode="agent" onclick="setMode('agent')">
+      🎯 وكيل كامل
+    </button>
+    <button class="mode-tab" data-mode="chat" onclick="setMode('chat')">
+      💬 محادثة
+    </button>
+    <button class="mode-tab" data-mode="tools" onclick="setMode('tools')">
+      🔧 أدوات
+    </button>
+    <button class="mode-tab" data-mode="memory" onclick="setMode('memory')">
+      🧠 الذاكرة
+    </button>
+  </div>
+
+  <!-- Config -->
+  <div class="sidebar-section">
+    <div class="section-title">⚙ النموذج | Model</div>
+    <select id="cfg-provider" class="cfg-sel" onchange="onProviderChange()">
+      <option value="mock">Mock (تجريب)</option>
+      {% for k,v in providers.items() %}
+      <option value="{{ k }}">{{ v.name }}</option>
+      {% endfor %}
+    </select>
+    <select id="cfg-model" class="cfg-sel"></select>
+    <input  id="cfg-key"   class="cfg-inp" type="password" placeholder="API Key..."/>
+    <div class="key-note">🔒 يُحفظ في المتصفح فقط</div>
+  </div>
+
+  <div class="sidebar-section">
+    <div class="section-title">🛡 الموافقة | Approval</div>
+    <label class="tog-label">
+      <input type="checkbox" id="cfg-approve"/>
+      <span class="tog"></span>
+      طلب موافقة للخطوات الحرجة
+    </label>
+  </div>
+
+  <div class="sidebar-section">
+    <div class="section-title">🔧 الأدوات المتاحة</div>
+    <div class="tools-list">
+      {% for t in tools %}
+      <span class="tool-chip">{{ t }}</span>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="sidebar-footer">
+    <a href="https://github.com/swordenkisk/wakil" target="_blank" class="gh-link">
+      GitHub 🇩🇿 swordenkisk
+    </a>
+  </div>
+</aside>
+
+<!-- ═══ MAIN ════════════════════════════════════════════════ -->
+<div class="main-wrap">
+
+  <!-- Top bar -->
+  <header class="topbar">
+    <button class="btn-sidebar-toggle" id="sidebar-toggle" onclick="toggleSidebar()">☰</button>
+    <div class="topbar-title" id="mode-title">🎯 وضع الوكيل الكامل</div>
+    <div class="topbar-right">
+      <span id="status-badge" class="badge-idle">جاهز</span>
+    </div>
+  </header>
+
+  <!-- ══ AGENT MODE ══ -->
+  <section class="panel active" id="panel-agent">
+
+    <!-- Input -->
+    <div class="task-input-wrap">
+      <textarea id="task-input" placeholder="صِف مهمتك... مثال:&#10;• اكتب API Flask لإدارة المهام مع SQLite&#10;• ابحث عن أفضل مكتبات Python للذكاء الاصطناعي&#10;• أنشئ تقرير تحليلي عن LangChain وDeep Agents" rows="3"></textarea>
+      <button class="btn-run" id="btn-run" onclick="runAgent()">
+        <span id="run-label">▶ تشغيل الوكيل</span>
+      </button>
+    </div>
+
+    <!-- Plan panel -->
+    <div class="plan-panel hidden" id="plan-panel">
+      <div class="plan-header">
+        <span class="plan-title">📋 خطة التنفيذ</span>
+        <span class="plan-complexity hidden" id="plan-complexity"></span>
+        <span class="plan-analysis hidden" id="plan-analysis"></span>
+      </div>
+      <div class="plan-steps" id="plan-steps"></div>
+      <div class="plan-progress-wrap">
+        <div class="plan-progress-bar" id="plan-progress" style="width:0%"></div>
+      </div>
+    </div>
+
+    <!-- Output terminal -->
+    <div class="terminal-wrap">
+      <div class="terminal-hdr">
+        <span class="terminal-title">📟 مجرى التنفيذ</span>
+        <div class="terminal-ctrl">
+          <span class="t-dot t-r"></span><span class="t-dot t-y"></span><span class="t-dot t-g"></span>
+          <button class="btn-clear-term" onclick="clearTerminal()">⌫</button>
+        </div>
+      </div>
+      <div class="terminal" id="terminal">
+        <div class="term-welcome">
+          <span class="tw-icon">🤖</span>
+          <span class="tw-text">وكيل جاهز — أدخل مهمتك وسيخطط وينفذ تلقائياً</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Synthesis output -->
+    <div class="synthesis-panel hidden" id="synthesis-panel">
+      <div class="syn-hdr">
+        <span class="syn-title">✅ النتيجة النهائية</span>
+        <button class="btn-copy" onclick="copySynthesis()">📋 نسخ</button>
+      </div>
+      <div class="syn-content" id="syn-content"></div>
+      <div class="timing-row hidden" id="timing-row">
+        <span id="t-total"></span>
+        <span id="t-steps"></span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══ CHAT MODE ══ -->
+  <section class="panel" id="panel-chat">
+    <div class="chat-messages" id="chat-messages">
+      <div class="chat-welcome">
+        <div class="cw-icon">💬</div>
+        <div>ابدأ محادثة مع وكيل</div>
+        <div class="cw-sub">للأسئلة البسيطة يجيب مباشرة — للمهام المعقدة يُخطط وينفذ</div>
+      </div>
+    </div>
+    <div class="chat-input-row">
+      <input id="chat-input" class="chat-inp" placeholder="اكتب رسالتك..." onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendChat()}"/>
+      <button class="btn-chat-send" onclick="sendChat()">إرسال ▶</button>
+    </div>
+  </section>
+
+  <!-- ══ TOOLS MODE ══ -->
+  <section class="panel" id="panel-tools">
+    <div class="tools-grid">
+      <div class="tool-card" onclick="selectTool('code_executor')">
+        <div class="tc-icon">⚙️</div>
+        <div class="tc-name">code_executor</div>
+        <div class="tc-desc">تنفيذ كود Python في بيئة معزولة</div>
+      </div>
+      <div class="tool-card" onclick="selectTool('file_reader')">
+        <div class="tc-icon">📂</div>
+        <div class="tc-name">file_reader</div>
+        <div class="tc-desc">قراءة ملفات من المساحة</div>
+      </div>
+      <div class="tool-card" onclick="selectTool('file_writer')">
+        <div class="tc-icon">📝</div>
+        <div class="tc-name">file_writer</div>
+        <div class="tc-desc">كتابة أو تعديل الملفات</div>
+      </div>
+      <div class="tool-card" onclick="selectTool('web_searcher')">
+        <div class="tc-icon">🌐</div>
+        <div class="tc-name">web_searcher</div>
+        <div class="tc-desc">بحث ويب عبر DuckDuckGo</div>
+      </div>
+      <div class="tool-card" onclick="selectTool('calculator')">
+        <div class="tc-icon">🔢</div>
+        <div class="tc-name">calculator</div>
+        <div class="tc-desc">حساب تعبيرات رياضية بأمان</div>
+      </div>
+      <div class="tool-card" onclick="selectTool('system_info')">
+        <div class="tc-icon">💻</div>
+        <div class="tc-name">system_info</div>
+        <div class="tc-desc">معلومات النظام والبيئة</div>
+      </div>
+    </div>
+    <div class="tool-runner hidden" id="tool-runner">
+      <div class="tr-title">🔧 تشغيل: <span id="tr-name"></span></div>
+      <textarea id="tr-input" class="tr-inp" placeholder="أدخل المدخلات للأداة..."></textarea>
+      <button class="btn-run-tool" onclick="runTool()">▶ تشغيل</button>
+      <div class="tr-output hidden" id="tr-output"></div>
+    </div>
+  </section>
+
+  <!-- ══ MEMORY MODE ══ -->
+  <section class="panel" id="panel-memory">
+    <div class="memory-hdr">
+      <div class="mem-stats" id="mem-stats">جاري التحميل...</div>
+      <div class="mem-actions">
+        <button class="btn-sm-act" onclick="loadMemories()">🔄 تحديث</button>
+        <button class="btn-sm-act btn-danger" onclick="clearMemories()">🗑 مسح الكل</button>
+      </div>
+    </div>
+    <div class="memory-search-row">
+      <input id="mem-search" class="mem-search-inp" placeholder="🔍 بحث في الذاكرة..."/>
+    </div>
+    <div class="memory-list" id="memory-list">
+      <div class="mem-empty">لا توجد ذكريات بعد — ابدأ مهمة لتُحفظ تلقائياً</div>
+    </div>
+    <div class="memory-add">
+      <div class="mem-add-title">➕ إضافة ذاكرة يدوياً</div>
+      <input  id="mem-key"     class="mem-inp" placeholder="المفتاح..."/>
+      <textarea id="mem-content" class="mem-ta"  placeholder="المحتوى..."></textarea>
+      <input  id="mem-tags"    class="mem-inp" placeholder="التاغات (مفصولة بفاصلة)..."/>
+      <button class="btn-sm-act" onclick="addMemory()">💾 حفظ</button>
+    </div>
+  </section>
+
+</div>
+
+<!-- ── Approval dialog ────────────────────────────────────── -->
+<div class="approval-dialog hidden" id="approval-dialog">
+  <div class="apv-box">
+    <div class="apv-title">⚠ موافقة مطلوبة</div>
+    <div class="apv-desc" id="apv-desc"></div>
+    <div class="apv-btns">
+      <button class="btn-approve" id="btn-approve-yes" onclick="approveStep(true)">✅ موافقة</button>
+      <button class="btn-reject"  id="btn-approve-no"  onclick="approveStep(false)">❌ رفض</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script src="{{ url_for('static',filename='js/app.js') }}"></script>
+<script>
+  window.PROVIDERS_DATA = {{ providers|tojson }};
+  window.TOOLS_DATA     = {{ tools|tojson }};
+</script>
+</body>
+</html>
